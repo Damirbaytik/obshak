@@ -92,6 +92,63 @@ export type Database = {
         }
         Relationships: []
       }
+      bot_events: {
+        Row: {
+          chat_id: number | null
+          created_at: string
+          event_type: string
+          id: number
+          payload: Json | null
+          telegram_id: number | null
+          update_id: number | null
+        }
+        Insert: {
+          chat_id?: number | null
+          created_at?: string
+          event_type: string
+          id?: number
+          payload?: Json | null
+          telegram_id?: number | null
+          update_id?: number | null
+        }
+        Update: {
+          chat_id?: number | null
+          created_at?: string
+          event_type?: string
+          id?: number
+          payload?: Json | null
+          telegram_id?: number | null
+          update_id?: number | null
+        }
+        Relationships: []
+      }
+      bot_user_status: {
+        Row: {
+          blocked_at: string | null
+          is_blocked: boolean
+          last_error: string | null
+          telegram_id: number
+          unblocked_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          blocked_at?: string | null
+          is_blocked?: boolean
+          last_error?: string | null
+          telegram_id: number
+          unblocked_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          blocked_at?: string | null
+          is_blocked?: boolean
+          last_error?: string | null
+          telegram_id?: number
+          unblocked_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       directions: {
         Row: {
           code: string

@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   type DbProfile,
   authenticateWithTelegram,
+  authenticateWithTelegramWebsite,
+  type TelegramLoginWidgetData,
   updateProfile as updateProfileApi,
   fetchProfile,
   getTelegramInitData,
@@ -23,11 +25,13 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isOnboarded: boolean;
   login: () => Promise<void>;
+  loginWithWidget: (data: TelegramLoginWidgetData) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<DbProfile>) => Promise<void>;
   error: string | null;
   notifications: Record<string, Notification>;
   isAdmin: boolean;
+  isAdminLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -42,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Record<string, Notification>>({});
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdminLoading, setIsAdminLoading] = useState(false);
 
   const login = useCallback(async () => {
     setIsLoading(true);
@@ -54,6 +59,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const nextProfile = await authenticateWithTelegram(initData);
+      setIsAdminLoading(true);
+      setProfile(nextProfile);
+    } catch (error) {
+      setProfile(null);
+      setError(getErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const loginWithWidget = useCallback(async (data: TelegramLoginWidgetData) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const nextProfile = await authenticateWithTelegramWebsite(data);
+      setIsAdminLoading(true);
       setProfile(nextProfile);
     } catch (error) {
       setProfile(null);
@@ -68,16 +89,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function checkAdmin() {
       if (!profile?.telegram_id) {
         setIsAdmin(false);
+        setIsAdminLoading(false);
         return;
       }
 
-      const { data } = await supabase
+      setIsAdminLoading(true);
+
+      const { data, error } = await supabase
         .from('admins')
         .select('id')
-        .eq('telegram_id', profile.telegram_id)
-        .single();
+        .eq('telegram_id', Number(profile.telegram_id))
+        .limit(1);
 
-      setIsAdmin(!!data);
+      if (error) {
+        console.error('Failed to check admin status:', error);
+        setIsAdmin(false);
+      } else {
+        setIsAdmin((data?.length ?? 0) > 0);
+      }
+
+      setIsAdminLoading(false);
     }
 
     checkAdmin();
@@ -159,6 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const nextProfile = await fetchProfile(userId);
         if (!isActive) return;
 
+        setIsAdminLoading(!!nextProfile);
         setProfile(nextProfile);
         setError(nextProfile ? null : 'Профиль не найден');
         
@@ -200,6 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const nextProfile = await authenticateWithTelegram(initData);
           if (!isActive) return;
 
+          setIsAdminLoading(true);
           setProfile(nextProfile);
           setError(null);
           
@@ -257,6 +290,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
     setProfile(null);
+    setIsAdmin(false);
+    setIsAdminLoading(false);
     setError(null);
     clearGroupsCache(); // Очищаем кеш групп при выходе
   }, []);
@@ -275,11 +310,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!profile,
         isOnboarded: !!profile?.onboarded,
         login,
+        loginWithWidget,
         logout,
         updateProfile: updateProfileFn,
         error,
         notifications,
         isAdmin,
+        isAdminLoading,
       }}
     >
       {children}

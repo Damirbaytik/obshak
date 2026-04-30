@@ -42,6 +42,36 @@ export async function authenticateWithTelegram(initData: string): Promise<DbProf
   return profile;
 }
 
+export interface TelegramLoginWidgetData {
+  id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  photo_url?: string;
+  auth_date: number;
+  hash: string;
+}
+
+export async function authenticateWithTelegramWebsite(loginWidgetData: TelegramLoginWidgetData): Promise<DbProfile> {
+  const { data, error } = await supabase.functions.invoke('telegram-auth', {
+    body: { loginWidgetData },
+  });
+
+  if (error) throw new Error(error.message);
+  if (!data?.token_hash || !data?.email) throw new Error('Website authentication failed');
+
+  const profile = data.profile as DbProfile;
+
+  const { error: otpError } = await supabase.auth.verifyOtp({
+    token_hash: data.token_hash,
+    type: 'magiclink',
+  });
+
+  if (otpError) throw new Error(`Session error: ${otpError.message}`);
+
+  return profile;
+}
+
 export async function updateProfile(updates: Partial<DbProfile>): Promise<DbProfile> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');

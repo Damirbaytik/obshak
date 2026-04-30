@@ -22,3 +22,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+.venv
+
+# Caddy ACME certs + config (bind-mounted; do not commit)
+data/caddy-data/
+data/caddy-config/

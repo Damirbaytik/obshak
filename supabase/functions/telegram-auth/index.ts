@@ -12,7 +12,7 @@ async function validateInitData(initData: string, botToken: string): Promise<Rec
 
   params.delete('hash');
   const entries = Array.from(params.entries());
-  entries.sort(([a], [b]) => a.localeCompare(b));
+  entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   const dataCheckString = entries.map(([k, v]) => `${k}=${v}`).join('\n');
 
   const encoder = new TextEncoder();
@@ -50,6 +50,41 @@ async function validateInitData(initData: string, botToken: string): Promise<Rec
   return result;
 }
 
+async function validateLoginWidgetData(
+  data: {
+    id: number;
+    first_name: string;
+    last_name?: string;
+    username?: string;
+    photo_url?: string;
+    auth_date: number;
+    hash: string;
+  },
+  botToken: string,
+) {
+  const { hash, ...payload } = data;
+  const entries = Object.entries(payload)
+    .filter(([, v]) => v !== undefined && v !== null)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const dataCheckString = entries.map(([k, v]) => `${k}=${v}`).join('\n');
+
+  const encoder = new TextEncoder();
+  const secret = await crypto.subtle.digest('SHA-256', encoder.encode(botToken));
+  const hmacKey = await crypto.subtle.importKey(
+    'raw',
+    secret,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', hmacKey, encoder.encode(dataCheckString));
+  const expected = Array.from(new Uint8Array(signature))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  if (expected !== hash) throw new Error('Invalid Login Widget signature');
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -63,30 +98,43 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { initData } = await req.json();
-    if (!initData) {
+    const { initData, loginWidgetData } = await req.json();
+    if (!initData && !loginWidgetData) {
       return new Response(
-        JSON.stringify({ error: 'Missing initData' }),
+        JSON.stringify({ error: 'Missing initData or loginWidgetData' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Validate initData signature
-    const parsed = await validateInitData(initData, botToken);
+    let telegramId: number;
+    let firstName: string;
+    let lastName: string | null;
+    let username: string | null;
+    let photoUrl: string | null;
+    let authDate: number;
 
-    // Parse user object
-    const userStr = parsed['user'];
-    if (!userStr) throw new Error('No user in initData');
-    const tgUser = JSON.parse(userStr);
+    if (initData) {
+      const parsed = await validateInitData(initData, botToken);
+      const userStr = parsed['user'];
+      if (!userStr) throw new Error('No user in initData');
+      const tgUser = JSON.parse(userStr);
 
-    const telegramId = tgUser.id;
-    const firstName = tgUser.first_name || 'User';
-    const lastName = tgUser.last_name || null;
-    const username = tgUser.username || null;
-    const photoUrl = tgUser.photo_url || null;
+      telegramId = tgUser.id;
+      firstName = tgUser.first_name || 'User';
+      lastName = tgUser.last_name || null;
+      username = tgUser.username || null;
+      photoUrl = tgUser.photo_url || null;
+      authDate = parseInt(parsed['auth_date'] || '0');
+    } else {
+      await validateLoginWidgetData(loginWidgetData, botToken);
+      telegramId = loginWidgetData.id;
+      firstName = loginWidgetData.first_name || 'User';
+      lastName = loginWidgetData.last_name || null;
+      username = loginWidgetData.username || null;
+      photoUrl = loginWidgetData.photo_url || null;
+      authDate = Number(loginWidgetData.auth_date || 0);
+    }
 
-    // Check auth_date freshness (max 1 day)
-    const authDate = parseInt(parsed['auth_date'] || '0');
     const currentTime = Math.floor(Date.now() / 1000);
     if (currentTime - authDate > 86400) {
       return new Response(
@@ -157,9 +205,13 @@ Deno.serve(async (req) => {
   } catch (error: unknown) {
     console.error('Telegram auth error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
+    const status =
+      message.includes('Invalid Login Widget signature') || message.includes('Invalid initData signature')
+        ? 401
+        : 500;
     return new Response(
       JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

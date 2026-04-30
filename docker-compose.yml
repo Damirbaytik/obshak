@@ -1,0 +1,44 @@
+services:
+  caddy:
+    image: caddy:alpine
+    environment:
+      STUDIO_BASIC_AUTH_USER: ${STUDIO_BASIC_AUTH_USER}
+      STUDIO_BASIC_AUTH_HASH: ${STUDIO_BASIC_AUTH_HASH}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      # Bind mounts: survive `docker compose down -v` (named volumes would be removed)
+      - ./data/caddy-data:/data
+      - ./data/caddy-config:/config
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - app
+
+  app:
+    build:
+      context: .
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY}
+        VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME}
+        VITE_MAINTENANCE_MODE: ${VITE_MAINTENANCE_MODE:-false}
+        VITE_TEST_MODE: ${VITE_TEST_MODE:-false}
+    restart: unless-stopped
+
+  telegram-bot:
+    build:
+      context: ./telegram-bot
+    environment:
+      BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      MINI_APP_URL: ${MINI_APP_URL}
+      WEBHOOK_PATH: /telegram-webhook
+      BASE_URL: ${BASE_URL:-https://obshak.space}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+    restart: unless-stopped
+    depends_on:
+      - caddy

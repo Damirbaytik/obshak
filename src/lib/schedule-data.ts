@@ -200,3 +200,8 @@ export function getDaySummaryEmoji(classCount: number): string {
   if (classCount <= 3) return '📚';
   return '💀';
 }
+
+export function formatScheduleTime(time: string): string {
+  if (!time) return "";
+  return time.slice(0, 5);
+}
