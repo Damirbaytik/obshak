@@ -29,11 +29,20 @@ const queryClient = new QueryClient();
 const isMaintenanceMode = import.meta.env.VITE_MAINTENANCE_MODE === 'true';
 
 function AppContent() {
-  const { profile, isAuthenticated, isOnboarded, isLoading, updateProfile, logout } = useAuth();
+  const { profile, isAuthenticated, isOnboarded, isLoading, updateProfile, logout, isWebApp } = useAuth();
   const location = useLocation();
   
   // Проверяем, находимся ли мы на админской странице
   const isAdminPage = location.pathname.startsWith('/admin');
+
+  // Если открыто через Telegram Mini App — показываем страницу переезда
+  if (isWebApp) {
+    return (
+      <Routes>
+        <Route path="*" element={<MovedPage />} />
+      </Routes>
+    );
+  }
 
   // Показываем заглушку техработ (кроме админов)
   if (isMaintenanceMode && !isAdmin) {
