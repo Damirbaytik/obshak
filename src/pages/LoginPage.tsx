@@ -9,14 +9,19 @@ const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME;
 export default function LoginPage() {
   const { isLoading, error, login, loginWithWidget, isWebApp } = useAuth();
   const widgetContainerRef = useRef<HTMLDivElement>(null);
-  const widgetLoadedRef = useRef(false);
 
   useEffect(() => {
     // Only load Login Widget for website users, not Mini App
-    if (isWebApp || !BOT_USERNAME || widgetLoadedRef.current) return;
+    if (isWebApp || !BOT_USERNAME) {
+      console.log('Widget not loading:', { isWebApp, BOT_USERNAME });
+      return;
+    }
+
+    console.log('Loading Telegram Login Widget for bot:', BOT_USERNAME);
 
     // Define global callback for Telegram Login Widget
     window.onTelegramAuth = async (user: TelegramLoginWidgetUser) => {
+      console.log('Telegram auth callback received:', user);
       await loginWithWidget(user);
     };
 
@@ -29,10 +34,17 @@ export default function LoginPage() {
     script.setAttribute('data-userpic', 'true');
     script.setAttribute('data-radius', '12');
     script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+    
+    script.onerror = () => {
+      console.error('Failed to load Telegram widget script');
+    };
+    
+    script.onload = () => {
+      console.log('Telegram widget script loaded successfully');
+    };
 
     if (widgetContainerRef.current) {
       widgetContainerRef.current.appendChild(script);
-      widgetLoadedRef.current = true;
     }
 
     return () => {

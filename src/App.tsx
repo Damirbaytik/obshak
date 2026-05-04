@@ -16,6 +16,7 @@ import SettingsPage from "./pages/SettingsPage.tsx";
 import Onboarding from "./pages/Onboarding.tsx";
 import LoginPage from "./pages/LoginPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import MovedPage from "./pages/MovedPage.tsx";
 import AdminSchedulePage from "./pages/AdminSchedulePage.tsx";
 import AdminUsersPage from "./pages/AdminUsersPage.tsx";
 import AdminNotificationsPage from "./pages/AdminNotificationsPage.tsx";
@@ -50,7 +51,7 @@ function AppContent() {
   if (!isAuthenticated) {
     return (
       <Routes>
-        <Route path="*" element={<LoginPage />} />
+        <Route path="*" element={<MovedPage />} />
       </Routes>
     );
   }
